@@ -1,0 +1,47 @@
+Envi variables
+
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - KAFKA_SOURCE_TOPIC=requested-data
+      - KAFKA_PROCESSED_TOPIC=missing-data
+      - KAFKA_DLQ_TOPIC=log-data
+      - KAFKA_BOOTSTRAP_SERVERS=pkc-p11xm.us-east-1.aws.confluent.cloud:9092
+      - KAFKA_API_KEY=7KL2EKWVOGWNEBX3
+      - KAFKA_API_SECRET=lzcRa1PgnzT9naGh6TJomiW0yti/d6HI91DZbhl3GmG03g8QbzBONuBcp134aOXA
+
+
+.......................................................
+
+Client.properties
+
+# Required connection configs for Kafka producer, consumer, and admin
+bootstrap.servers=pkc-p11xm.us-east-1.aws.confluent.cloud:9092
+security.protocol=SASL_SSL
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="XLEUEQUCZ22HMOWB" password="XrKVtBIj+uiC4HROd2MTfXbeJkxkVOEh2NYpcgc3X5tporQTJHARyE6DghZvOpXV";
+sasl.mechanism=PLAIN
+# Required for correctness in Apache Kafka clients prior to 2.6
+client.dns.lookup=use_all_dns_ips
+
+# Best practice for higher availability in Apache Kafka clients prior to 3.0
+session.timeout.ms=45000
+
+# Best practice for Kafka producer to prevent data loss
+acks=all
+
+........................................................
+
+Secrets
+
+CC API KEY
+XLEUEQUCZ22HMOWB
+CC Secret
+XrKVtBIj+uiC4HROd2MTfXbeJkxkVOEh2NYpcgc3X5tporQTJHARyE6DghZvOpXV
+KAFKA API KEY
+7KL2EKWVOGWNEBX3
+KAFKA API Secret
+lzcRa1PgnzT9naGh6TJomiW0yti/d6HI91DZbhl3GmG03g8QbzBONuBcp134aOXA
+
+
+
+job 
+
+ flink run -c ConsumeFlinkData /opt/flink/jars/events-1.0-SNAPSHOT.jar '{"name": "orders","api_source": "a2b603c4-21fb-41eb-9e1d-b5b204a20f6b","api": "58b00d1c-fca2-4b24-8c39-0999b6412d55","output_encoding": "JSON","rules": [{"matchers": [{"field": "response.status","operator": "=","value": "200"}], "key_template": "{{request.path}}", "value_template": "{\"specversion\": \"1.0\", \"action\": \"place-order\", \"source\": \"{{ client.ip }}\", \"request\": \"{{ request }}\", \"response\": \"{{ response }}\"}", "combinator": "AND", "stream": "7ce267f9-91c7-4eb7-9af7-fd174cd60331"}]}' "log-data" "requested-data" "missing-data"
