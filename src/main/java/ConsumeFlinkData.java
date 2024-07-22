@@ -1,12 +1,17 @@
 import org.apache.flink.api.common.eventtime.WatermarkStrategy;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
+import org.apache.flink.api.common.typeinfo.TypeHint;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.connector.kafka.sink.KafkaRecordSerializationSchema;
 import org.apache.flink.connector.kafka.sink.KafkaSink;
 import org.apache.flink.connector.kafka.source.KafkaSource;
 import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer;
 import org.apache.flink.streaming.api.datastream.DataStream;
+import org.apache.flink.streaming.api.datastream.SingleOutputStreamOperator;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
+import org.apache.flink.streaming.api.graph.StreamGraph;
+import org.slf4j.LoggerFactory;
 import scala.collection.mutable.StringBuilder;
 
 // PARSING THE JSON
@@ -32,8 +37,13 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+//import org.apache.logging.log4j.LogManager;
+//import org.apache.logging.log4j.Logger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.naming.Context;
 
 class Tuple2StringKeySchema implements SerializationSchema<Tuple2<String, String>> {
     @Override
@@ -56,7 +66,10 @@ class Tuple2StringValueSchema implements SerializationSchema<Tuple2<String, Stri
 
 public class ConsumeFlinkData {
 
-    protected static final Logger logger = LogManager.getLogger(ConsumeFlinkData.class);
+     //protected static final Logger logger = LogManager.getLogger(ConsumeFlinkData.class);
+     private static final Logger LOG = LoggerFactory.getLogger(ConsumeFlinkData.class);
+
+    //protected static final Logger LOG = LoggerFactory.getLogger(ConsumeFlinkData.class);
 
     public static void main(String[] args) throws Exception {
 
@@ -147,6 +160,9 @@ public class ConsumeFlinkData {
         System.out.println(" static fields : " + staticFields + "\n");
         System.out.println(" staticvalue : " + staticValues + "\n");
 
+       // logger.info(" KEY : " + Key + "\n");
+        //logger.info(" value : " + fields + "\n");
+
         // ------- CREATE STREAM ENVIRONMENT AND TABLE SOURCE -------------
 
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -212,13 +228,65 @@ public class ConsumeFlinkData {
                 }
             }
             // System.out.println("SQL QUERY : " + queryBuilder);
-            logger.debug("SQL QUERY : {}", queryBuilder);
+            LOG.debug("SQL QUERY : {}", queryBuilder);//1
+
+            System.out.println("Before testing");
+
+            System.out.println(queryBuilder);
+
+            System.out.println("testing");
+           // logger.info("testing1");
 
             // -------------RUN THE QUERY AND THEN CONVERT TABLESTREAM TO DATASTREAM AGAIN
             // ----------------
             Table resultTable = tenv.sqlQuery(queryBuilder.toString());
 
+
             DataStream<Row> resultStream = tenv.toDataStream(resultTable);
+
+            //.....................................
+            System.out.println("resultStream");
+            System.out.println(resultStream);
+            System.out.println("resultTable");
+            System.out.println(resultTable);
+
+            
+            // Print the Table schema
+            System.out.println("Table Schema: " + resultTable.getSchema());
+
+            // Print DataStream schema for debugging
+            System.out.println("DataStream Type Information: " + resultStream.getType());
+
+            // Print the contents of the DataStream
+            resultStream.print("DataStream Content");
+
+            // Alternatively, you can use a SinkFunction to handle the data
+            resultStream.addSink(new SinkFunction<Row>() {
+                @Override
+                public void invoke(Row value, Context context) {
+                    System.out.println("Row: " + value);
+                }
+            });
+
+            // Print the contents of the DataStream in a more controlled way
+            // You can also use a MapFunction to transform the data before printing
+            SingleOutputStreamOperator<String> printedStream = resultStream
+                    .map(row -> "Row: " + row)
+                    .returns(TypeInformation.of(new TypeHint<String>() {}));
+
+            // Print the contents of the DataStream
+            printedStream.print("Mapped DataStream Content");
+
+            // Execute the Flink job
+            try {
+                env.execute("Print Flink Data");
+            } catch (Exception e) {
+                e.printStackTrace();
+
+
+            System.out.println("OOps");
+
+            //...................................
 
             TypeInformation<Tuple2<String, String>> tupleTypeInfo = TypeExtractor
                     .getForObject(new Tuple2<>("key", "value"));
@@ -233,10 +301,23 @@ public class ConsumeFlinkData {
                             JsonNode jsonNode = objectMapper
                                     .readTree(String.valueOf(rawData));
 
+                            //..............
+                            //System.out.println("printing jsonNode");
+                            LOG.info("jsonNode= " ,jsonNode);//2
+
+                            //..............
+
+                            JsonNode dataNode = jsonNode.get("data");
+
+                            //...............
+                           // System.out.println("printing dataNode");
+                            LOG.info("dataNode" , dataNode);//3
+                            //System.out.println(dataNode);
+                            //..............
                             // flag
                             int flag = 0;
 
-                            JsonNode keyValue = jsonNode.at(keyField);
+                            JsonNode keyValue = dataNode.at(keyField);
 
                             // Process data according to the template
                             StringBuilder processedKeyBuilder = new StringBuilder();
@@ -273,7 +354,7 @@ public class ConsumeFlinkData {
                                             .substring(fieldPath
                                                     .lastIndexOf("/")
                                                     + 1);
-                                    JsonNode fieldValue = jsonNode.at(fieldPath);
+                                    JsonNode fieldValue = dataNode.at(fieldPath);
 
                                     if (fieldValue != null
                                             && !fieldValue.isMissingNode()
@@ -323,7 +404,7 @@ public class ConsumeFlinkData {
                             return new Tuple2<>(processedKeyBuilder.toString(),
                                     processedValueJson.toString());
                         } catch (Exception e) {
-                            logger.error("An error occurred while processing data: {}",
+                            LOG.error("An error occurred while processing data: {}",//4
                                     rawData, e);
                             return null;
                         }
@@ -356,7 +437,7 @@ public class ConsumeFlinkData {
             //debug
             System.out.println("postcheck");
         } catch (Exception e) {
-            logger.error("An error occurred while making flink sql query", e);
+            LOG.error("An error occurred while making flink sql query", e);//5
         }
     }
 
